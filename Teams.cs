@@ -171,9 +171,9 @@ namespace TeamsAutoJoiner
         }
         private void ActivateMeeting()
         {
-            while(Meetings.Count != 0)
+            while (Meetings.Count != 0)
             {
-                if(driver.Url != "data:,") driver.Navigate().GoToUrl("data:,");
+                if (driver.Url != "data:,") driver.Navigate().GoToUrl("data:,");
 
                 ActiveMeeting = Meetings.Dequeue();
                 if (ActiveMeeting.url == null) continue;
@@ -195,6 +195,7 @@ namespace TeamsAutoJoiner
 
                 driver.Navigate().GoToUrl(ActiveMeeting.url);
 
+                Thread.Sleep(1000);
                 wt.Until(driver => driver.FindElements(By.CssSelector("button.btn.primary")))[1].Click();
 
                 try
