@@ -1,7 +1,6 @@
 ﻿using Newtonsoft.Json;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Support.UI;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,6 +9,9 @@ using System.Threading.Tasks;
 
 namespace TeamsAutoJoiner
 {
+
+    //Todo:
+    //Chrome cleanup
     class Teams
     {
         static String SettingsFile = "config.json";
@@ -36,21 +38,70 @@ namespace TeamsAutoJoiner
 
         class Settings
         {
-            public String SrcFile = "";
-            public String logLevel = "3";
+            public String SrcFile = "schedule.txt";
             public String username = "";
             public String password = "";
+            public bool headless = true;
+            public bool mute = true;
 
             bool validate()
             {
-                int _;
-                return int.TryParse(logLevel, out _) && username != "" && password != "" && SrcFile != "";
+                return username != "" && password != "";
             }
         };
         Settings options = new Settings();
 
         IWebDriver driver = null;
+        ChromeDriverService service = null;
+        ChromeOptions opt = null;
 
+        private void InitChrome()
+        {
+            service = ChromeDriverService.CreateDefaultService();
+            opt = new ChromeOptions();
+            
+            opt.AddArguments(new string[] {
+                "--no-sandbox",
+                "--disable-speech-api",
+                "--disable-default-apps",
+                "--disable-infobars",
+                "--disable-extensions",
+                "--use-fake-ui-for-media-stream"
+            });
+
+            string pref = "2";
+            //Headless by default muted
+            if (options.headless) { opt.AddArguments(new string[] { "--headless", "--disable-gpu" }); }
+            else
+            { //Muting audio and mic
+                if (options.mute)
+                {
+                    opt.AddArgument("--mute-audio");
+                }
+                else pref = "1";
+            }
+            opt.AddLocalStatePreference("profile.default_content_setting_values.media_stream_mic", pref);
+            //Camera always off
+            opt.AddLocalStatePreference("profile.default_content_setting_values.media_stream_camera", "2");
+            //Notifications always off
+            opt.AddLocalStatePreference("profile.default_content_setting_values.notifications", "2");
+
+
+            //Log stuff
+            Directory.CreateDirectory("Logs");
+            File.CreateText("chromedriver.log").Close();
+
+            service.EnableVerboseLogging = false;
+            service.LogPath = Path.Combine("Logs", "chromedriver.log");
+
+            //Disable messages in console
+            service.HideCommandPromptWindow = true;
+
+            driver = new ChromeDriver(service, opt);
+
+            //Set 20 sec timeout
+            driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(20);
+        }
         private void ParseArgs(String []args)
         {
             if (args.Length == 0) return;
@@ -77,10 +128,6 @@ namespace TeamsAutoJoiner
                         case 'P':
                             options.password = args[++i];
                             break;
-                        case 'd':
-                        case 'D':
-                            options.logLevel = "1";
-                            break;
                         case 's':
                         case 'S':
                             SaveConfig();
@@ -93,8 +140,6 @@ namespace TeamsAutoJoiner
         {
             if (!File.Exists(options.SrcFile)) throw new FileNotFoundException("File " + options.SrcFile + " dont exists.");
 
-            Console.WriteLine("Loading shedudle.");
-
             StreamReader fileStream = File.OpenText(options.SrcFile);
             Meetings = new Queue<MeetingEntry>();
             while(!fileStream.EndOfStream)
@@ -106,7 +151,10 @@ namespace TeamsAutoJoiner
                 int diff = idxe - idxb;
                 me.label = line.Substring(0, idxb);
                 String[] time = line.Substring(idxb + 1, diff-1).Split('-');
-                Console.WriteLine(me.label + " " + time[0] + " " + time[1]);
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write(me.label + " ");
+                Console.ForegroundColor = ConsoleColor.Blue;
+                Console.WriteLine(time[0] + " " + time[1]);
                 me.start = TimeSpan.ParseExact(time[0], "h\\:mm", System.Globalization.CultureInfo.InvariantCulture);
                 me.end = TimeSpan.ParseExact(time[1], "h\\:mm", System.Globalization.CultureInfo.InvariantCulture);
                 String url = fileStream.ReadLine();
@@ -116,6 +164,9 @@ namespace TeamsAutoJoiner
                 Meetings.Enqueue(me);
             }
             fileStream.Close();
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            Console.WriteLine("Shedule loaded.");
+            Console.ResetColor();
         }
         public void Work(String []args)
         {
@@ -123,14 +174,7 @@ namespace TeamsAutoJoiner
             this.LoadConfig();
             this.LoadSchududle();
 
-            ChromeOptions opt = new ChromeOptions();
-            opt.AddLocalStatePreference("profile.default_content_setting_values.media_stream_mic", "2");
-            opt.AddLocalStatePreference("profile.default_content_setting_values.media_stream_camera", "2");
-            opt.AddLocalStatePreference("profile.default_content_setting_values.notifications", "2");
-            opt.AddArguments(new string[] { "--log-level=" + options.logLevel, "--no-sandbox", "--headless", "--disable-speech-api", "--mute-audio", "--disable-default-apps", "--disable-infobars", "--disable-extensions", "use-fake-ui-for-media-stream" });
-
-            driver = new ChromeDriver(opt);
-            _ = driver.Manage().Timeouts().ImplicitWait;
+            this.InitChrome();
 
             this.ActivateMeeting();
         }
@@ -141,10 +185,10 @@ namespace TeamsAutoJoiner
                 using (StreamWriter f = new StreamWriter(SettingsFile))
                 {
                     f.Write(JsonConvert.SerializeObject(options));
-                    Console.WriteLine("Config saved");
                 }
             }
-            catch (Exception ex) { Console.WriteLine("Coudnt save config"); throw new ArgumentException(); }
+            catch (Exception ex) { Console.ForegroundColor = ConsoleColor.Red; Console.WriteLine("Coudnt save config"); throw new ArgumentException(); }
+            Console.ResetColor();
         }
         private void LoadConfig()
         {
@@ -153,21 +197,23 @@ namespace TeamsAutoJoiner
                 using (StreamReader f = new StreamReader(SettingsFile))
                 {
                     options = JsonConvert.DeserializeObject<Settings>(f.ReadToEnd());
-                    Console.WriteLine("Config Loaded");
+                    Console.ForegroundColor = ConsoleColor.DarkYellow;
+                    Console.WriteLine("Config Loaded.");
                 }
-            } catch(Exception ex) { SaveConfig(); Console.WriteLine("Coudnt load config"); throw new ArgumentException(); }
+            } catch(Exception ex) { Console.ForegroundColor = ConsoleColor.Red; Console.WriteLine("Coudnt load config"); throw new ArgumentException(); }
+            SaveConfig();
+            Console.ResetColor();
         }
-        private void Login(WebDriverWait wt)
+        private void Login()
         {
-            wt.Until(driver => driver.FindElement(By.Id("i0116"))).SendKeys(options.username + Keys.Enter);
             Thread.Sleep(1000);
-            wt.Until(driver => driver.FindElement(By.Id("i0118"))).SendKeys(options.password + Keys.Enter);
+            driver.FindElement(By.Id("i0116")).SendKeys(options.username + Keys.Enter);
             Thread.Sleep(1000);
-            wt.Until(driver => driver.FindElement(By.Id("idSIButton9"))).Click();
+            driver.FindElement(By.Id("i0118")).SendKeys(options.password + Keys.Enter);
+            driver.FindElement(By.Id("idSIButton9")).Click();
 
-            Console.WriteLine("Login successful");
-            Console.WriteLine("Username is {}", options.username);
-            Console.WriteLine("Password is {}", options.password);
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("Login successful.");
         }
         private void ActivateMeeting()
         {
@@ -178,47 +224,53 @@ namespace TeamsAutoJoiner
                 ActiveMeeting = Meetings.Dequeue();
                 if (ActiveMeeting.url == null) continue;
 
+                //Time managment
                 if (ActiveMeeting.url != null && ActiveMeeting.start.CompareTo(DateTime.Now.TimeOfDay) == 1)
                 {
-                    Console.WriteLine("Waiting to start meeting in " + ActiveMeeting.start);
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine("Waiting to start " + ActiveMeeting.label + " in " + ActiveMeeting.start + ".");
                     Task.Delay(ActiveMeeting.start - DateTime.Now.TimeOfDay).Wait();
                 }
                 else if (!(DateTime.Now.TimeOfDay - ActiveMeeting.start < ActiveMeeting.end - ActiveMeeting.start))
                 {
-                    Console.WriteLine(ActiveMeeting.label + " is gone");
+                    Console.ForegroundColor = ConsoleColor.DarkGray;
+                    Console.WriteLine(ActiveMeeting.label + " gone.");
                     continue;
                 }
-                Console.WriteLine("Connecting to " + ActiveMeeting.label);
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Connecting to " + ActiveMeeting.label + ".");
 
                 Task wait = Task.Delay(ActiveMeeting.end - ActiveMeeting.start);
-                WebDriverWait wt = new WebDriverWait(driver, TimeSpan.FromSeconds(60));
 
                 driver.Navigate().GoToUrl(ActiveMeeting.url);
 
-                Thread.Sleep(1000);
-                wt.Until(driver => driver.FindElements(By.CssSelector("button.btn.primary")))[1].Click();
+                driver.FindElements(By.CssSelector("button.btn.primary"))[1].Click();
 
-                try
-                {
-                    new WebDriverWait(driver, TimeSpan.FromSeconds(7)).Until(ExpectedConditions.ElementExists(By.LinkText("войти")));
-                    driver.FindElement(By.LinkText("войти")).Click();
-                    Thread.Sleep(4000);
-                    Login(wt);
-                }
-                catch(Exception ex) {}
+                driver.FindElement(By.LinkText("войти")).Click();
+                Login();
 
-                wt.Until(driver => driver.FindElement(By.CssSelector("button.join-btn.ts-btn.inset-border.ts-btn-primary"))).Click();
-                Console.WriteLine("Connected");
+                driver.FindElement(By.CssSelector("button.join-btn.ts-btn.inset-border.ts-btn-primary")).Click();
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Connected.");
 
 
                 wait.Wait();
             }
-            Console.WriteLine("No meetings");
+            Console.ForegroundColor = ConsoleColor.DarkRed;
+            Console.WriteLine("No meetings.");
             SaveConfig();
+
+            Console.ResetColor();
         }
-        ~Teams()
+        public void Close()
         {
-            driver?.Close();
+            Console.WriteLine("Exiting.");
+
+            //Fix background browser stays open
+            service.HideCommandPromptWindow = false;
+            service.Dispose();
+            driver.Quit();
         }
     }
 }
