@@ -200,9 +200,16 @@ namespace TeamsAutoJoiner
                     Console.ForegroundColor = ConsoleColor.DarkYellow;
                     Console.WriteLine("Config Loaded.");
                 }
-            } catch(Exception ex) { Console.ForegroundColor = ConsoleColor.Red; Console.WriteLine("Coudnt load config"); throw new ArgumentException(); }
-            SaveConfig();
-            Console.ResetColor();
+            } catch(Exception ex) {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Coudnt load config");
+                throw new ArgumentException();
+            }
+            finally
+            {
+                SaveConfig();
+                Console.ResetColor();
+            }
         }
         private void Login()
         {
