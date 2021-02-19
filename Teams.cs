@@ -267,7 +267,7 @@ namespace TeamsAutoJoiner
                 Console.WriteLine("Connected.");
 
 
-                Task.Delay(ActiveMeeting.end - ActiveMeeting.start).Wait();
+                Task.Delay(ActiveMeeting.end - DateTime.Now.TimeOfDay).Wait();
                 Console.WriteLine(ActiveMeeting.label + " Ended.");
             }
             Console.ForegroundColor = ConsoleColor.DarkRed;
