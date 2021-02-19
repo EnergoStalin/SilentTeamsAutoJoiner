@@ -62,6 +62,7 @@ namespace TeamsAutoJoiner
             
             opt.AddArguments(new string[] {
                 "--no-sandbox",
+                "--disable-password-manager",
                 "--disable-speech-api",
                 "--disable-default-apps",
                 "--disable-infobars",
@@ -248,21 +249,26 @@ namespace TeamsAutoJoiner
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("Connecting to " + ActiveMeeting.label + ".");
 
-                Task wait = Task.Delay(ActiveMeeting.end - ActiveMeeting.start);
-
                 driver.Navigate().GoToUrl(ActiveMeeting.url);
 
                 driver.FindElements(By.CssSelector("button.btn.primary"))[1].Click();
 
-                driver.FindElement(By.LinkText("войти")).Click();
-                Login();
+                //Try login
+                try
+                {
+                    driver.FindElement(By.LinkText("войти")).Click();
+                    Login();
+                }
+                catch(NoSuchElementException ex) { }
+
 
                 driver.FindElement(By.CssSelector("button.join-btn.ts-btn.inset-border.ts-btn-primary")).Click();
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("Connected.");
 
 
-                wait.Wait();
+                Task.Delay(ActiveMeeting.end - ActiveMeeting.start).Wait();
+                Console.WriteLine(ActiveMeeting.label + " Ended.");
             }
             Console.ForegroundColor = ConsoleColor.DarkRed;
             Console.WriteLine("No meetings.");
