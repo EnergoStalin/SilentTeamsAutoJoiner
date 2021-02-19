@@ -214,10 +214,11 @@ namespace TeamsAutoJoiner
         }
         private void Login()
         {
-            Thread.Sleep(1000);
+            Thread.Sleep(3000);
             driver.FindElement(By.Id("i0116")).SendKeys(options.username + Keys.Enter);
-            Thread.Sleep(1000);
+            Thread.Sleep(3000);
             driver.FindElement(By.Id("i0118")).SendKeys(options.password + Keys.Enter);
+            Thread.Sleep(3000);
             driver.FindElement(By.Id("idSIButton9")).Click();
 
             Console.ForegroundColor = ConsoleColor.Green;
@@ -256,12 +257,13 @@ namespace TeamsAutoJoiner
                 //Try login
                 try
                 {
+                    Thread.Sleep(4000);
                     driver.FindElement(By.LinkText("войти")).Click();
                     Login();
                 }
                 catch(NoSuchElementException ex) { }
 
-
+                Thread.Sleep(2000);
                 driver.FindElement(By.CssSelector("button.join-btn.ts-btn.inset-border.ts-btn-primary")).Click();
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("Connected.");
