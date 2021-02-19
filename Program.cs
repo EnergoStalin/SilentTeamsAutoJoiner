@@ -38,8 +38,24 @@ namespace TeamsAutoJoiner
         }
         #endregion
 
+        enum EXECUTION_STATE : uint
+        {
+            ES_AWAYMODE_REQUIRED = 0x00000040,
+            ES_CONTINUOUS = 0x80000000,
+            ES_DISPLAY_REQUIRED = 0x00000002,
+            ES_SYSTEM_REQUIRED = 0x00000001
+        };
+
+        [DllImport("Kernel32.dll")]
+        private static extern EXECUTION_STATE SetThreadExecutionState(EXECUTION_STATE state);
         static void Main(string[] args)
         {
+            if(SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_SYSTEM_REQUIRED) == 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("SetThreadExecutionState failed.");
+                return;
+            }
             _handler += new EventHandler(Handler);
             SetConsoleCtrlHandler(_handler, true);
             try
