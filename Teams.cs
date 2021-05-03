@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Support.UI;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,7 +12,18 @@ namespace TeamsAutoJoiner
 {
 
     //Todo:
-    //Chrome cleanup
+    //Add invalid link detection
+
+    static class Miscellaneous
+    {
+        public static void Timeout(Func<int> action, TimeSpan timeout)
+        {
+            TimeSpan start = DateTime.Now.TimeOfDay;
+            timeout += start;
+            while (action() == -1 && timeout != TimeSpan.Zero && start.CompareTo(timeout) > 0) {}
+        }
+    };
+
     class Teams
     {
         static String SettingsFile = "config.json";
@@ -212,18 +224,28 @@ namespace TeamsAutoJoiner
                 Console.ResetColor();
             }
         }
-        private void Login()
+        private int Login()
         {
-            Thread.Sleep(3000);
-            driver.FindElement(By.Id("i0116")).SendKeys(options.username + Keys.Enter);
-            Thread.Sleep(3000);
-            driver.FindElement(By.Id("i0118")).SendKeys(options.password + Keys.Enter);
-            Thread.Sleep(3000);
-            driver.FindElement(By.Id("idSIButton9")).Click();
+            //Todo: Add invalid login detection
+            var wt = new WebDriverWait(driver, TimeSpan.FromSeconds(3));
+
+            var e = wt.Until(driver => { return driver.FindElement(By.Id("i0116")); });
+            if (e != null) e.SendKeys(options.username + Keys.Enter);
+            else return -1;
+
+            e = wt.Until(driver => { return driver.FindElement(By.Id("i0118")); });
+            if (e != null) e.SendKeys(options.password + Keys.Enter);
+            else return -1;
+
+            e = wt.Until(driver => { return driver.FindElement(By.Id("idSIButton9")); });
+            if (e != null) e.Click();
+            else return -1;
 
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("Login successful.");
-        }
+
+            return 0;
+        } //Todo
         private void ActivateMeeting()
         {
             while (Meetings.Count != 0)
@@ -237,7 +259,8 @@ namespace TeamsAutoJoiner
                 if (ActiveMeeting.url != null && ActiveMeeting.start.CompareTo(DateTime.Now.TimeOfDay) == 1)
                 {
                     Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine("Waiting to start " + ActiveMeeting.label + " in " + ActiveMeeting.start + ".");
+                    Console.Title = "Waiting to start " + ActiveMeeting.label + " in " + ActiveMeeting.start + ".";
+                    Console.WriteLine(Console.Title);
                     Task.Delay(ActiveMeeting.start - DateTime.Now.TimeOfDay).Wait();
                 }
                 else if (!(DateTime.Now.TimeOfDay - ActiveMeeting.start < ActiveMeeting.end - ActiveMeeting.start))
@@ -248,7 +271,8 @@ namespace TeamsAutoJoiner
                 }
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("Connecting to " + ActiveMeeting.label + ".");
+                Console.Title = "Connecting to " + ActiveMeeting.label + ".";
+                Console.WriteLine(Console.Title);
 
                 driver.Navigate().GoToUrl(ActiveMeeting.url);
 
@@ -257,23 +281,46 @@ namespace TeamsAutoJoiner
                 //Try login
                 try
                 {
-                    Thread.Sleep(4000);
-                    driver.FindElement(By.LinkText("войти")).Click();
-                    Login();
+                    Miscellaneous.Timeout(() => {
+                        var e = driver.FindElement(By.LinkText("войти"));
+                        try
+                        {
+                            e.Click();
+                            return 0;
+                        }
+                        catch (Exception)
+                        {
+                            return -1;
+                        }
+                    }, TimeSpan.FromSeconds(4));
+                    Miscellaneous.Timeout(() => { return Login(); }, ActiveMeeting.end - DateTime.Now.TimeOfDay);
                 }
                 catch(NoSuchElementException ex) { }
 
-                Thread.Sleep(2000);
-                driver.FindElement(By.CssSelector("button.join-btn.ts-btn.inset-border.ts-btn-primary")).Click();
+                Miscellaneous.Timeout(() => {
+                    var e = driver.FindElement(
+                        By.CssSelector("button.join-btn.ts-btn.inset-border.ts-btn-primary"));
+                    try
+                    {
+                        e.Click();
+                        return 0;
+                    }
+                    catch (Exception)
+                    {
+                        return -1;
+                    }
+                }, ActiveMeeting.end - DateTime.Now.TimeOfDay);
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("Connected.");
+                Console.Title = "Connected.";
+                Console.WriteLine(Console.Title);
 
 
                 Task.Delay(ActiveMeeting.end - DateTime.Now.TimeOfDay).Wait();
                 Console.WriteLine(ActiveMeeting.label + " Ended.");
             }
             Console.ForegroundColor = ConsoleColor.DarkRed;
-            Console.WriteLine("No meetings.");
+            Console.Title = "No meetings.";
+            Console.WriteLine(Console.Title);
             SaveConfig();
 
             Console.ResetColor();
