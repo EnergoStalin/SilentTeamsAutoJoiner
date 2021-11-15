@@ -4,3 +4,6 @@ packages
 properties
 
 .vs
+*.exe
+*.dll
+*.log
